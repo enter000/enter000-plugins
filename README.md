@@ -10,7 +10,7 @@ Plugins for Claude Code.
 ## clawd-runner
 
 Two tiny Clawds live above the prompt: they wander, nap, play tag, watch you type and now and then
-comment on your work (in Russian).
+comment on your work, in the language you write to the agent in.
 
 - `/clawd` hides or shows them
 - `/clawd quiet` / `/clawd talk` turns their remarks off or on; each remark is a small model call
