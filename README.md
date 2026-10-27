@@ -10,6 +10,8 @@ agent.
 
 ## clawd-runner: a Clawd pet for Claude Code
 
+![Two pixel Clawds, the Claude Code mascot, standing side by side](docs/clawds.png)
+
 A terminal pet for Claude Code: two pixel Clawds, the Claude Code mascot, live in the strip above
 your prompt. A tamagotchi-style companion that keeps you company while the agent writes your code.
 
