@@ -1,7 +1,6 @@
-import type { Pose, State } from './clawd'
+import type { Pose } from './clawd'
 
-// Pip, the youngest: the fine Clawd's quadrant blocks on a smaller body, his eyes, and a mouth
-// that shows while he talks.
+// Pip, the youngest: the fine Clawd's quadrant blocks and eyes on a smaller body.
 const W = 20 // pixels, two per cell
 const H = 8 // pixels, two per text row; the top two are room to jump
 const EYES = { ahead: [6, 12], left: [5, 11], right: [7, 13] }
@@ -9,12 +8,7 @@ const EAR_ROWS = { up: [0, 1], mid: [1, 2], down: [2, 3] }
 const LEG_COLS = [4, 7, 11, 14] // each leg two pixels wide, as wide as an eye or an ear
 const QUADRANTS = ' ▘▝▀▖▌▞▛▗▚▐▜▄▙▟█'
 
-export type Face = { open: boolean }
-
-// Talking: open and shut, over and over.
-export const face = (s: State): Face => ({ open: s.say !== null && Math.floor(s.step / 3) % 2 === 0 })
-
-export const drawPip = (p: Pose, f: Face, lean: number, dir: 1 | -1): string[] => {
+export const drawPip = (p: Pose, lean: number, dir: 1 | -1): string[] => {
   const px = new Array<boolean>(W * H).fill(false)
   const top = H - 6 - p.lift + p.sink
   // Leaning shears the body: the top row moves the most, the feet stay put.
@@ -31,9 +25,6 @@ export const drawPip = (p: Pose, f: Face, lean: number, dir: 1 | -1): string[] =
     const row = p.eyeRow === 0 ? 0 : 1
     for (const c of EYES[p.look]) { set(row, c, false); set(row, c + 1, false) }
   }
-  // Only while he talks, and wide: a narrow one under the eyes reads as a nose.
-  const centre = (EYES[p.look][0]! + EYES[p.look][1]!) / 2 + 1
-  if (f.open) for (let c = centre - 2; c <= centre + 1; c++) set(2, c, false)
   LEG_COLS.forEach((c, i) => {
     set(4, c); set(4, c + 1)
     // A lifted leg bends back by half its width, away from where he is going.

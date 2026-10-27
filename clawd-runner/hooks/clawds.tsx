@@ -4,7 +4,7 @@ import { ACCEL, born, chance, draw, emote, EXTRA, FALL_ASLEEP, hop, JUMP, pose, 
 import type { Look, Props, State } from './clawd'
 import type { Action, Order } from '../types'
 import { drawHd, lean } from './clawd-hd'
-import { drawPip, face } from './clawd-pip'
+import { drawPip } from './clawd-pip'
 import { nudge } from './mind'
 
 // Three Clawds in one band: the classic one, the finer one and Pip, the youngest. Each lives by his own
@@ -336,7 +336,7 @@ const Clawds: ClientModule<Props, Pair> = (props, surface) => {
   const sprites: [State, string[]][] = [
     [classic!, draw(pose(classic!))],
     [fine!, drawHd(pose(fine!), lean(fine!), facing(fine!))],
-    ...(pip ? [[pip, drawPip(pose(pip), face(pip), lean(pip), facing(pip))] as [State, string[]]] : []),
+    ...(pip ? [[pip, drawPip(pose(pip), lean(pip), facing(pip))] as [State, string[]]] : []),
   ]
   const taken: Span[] = []
   for (const [s, rows] of sprites) {
