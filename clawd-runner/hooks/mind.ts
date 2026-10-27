@@ -6,10 +6,12 @@ export type Needs = { energy: number; boredom: number; social: number; curiosity
 export type Trait = { speed: number; lazy: number; hyper: number; sociable: number; moodBase: number; stamina: number }
 export type Choice = 'wander' | 'sit' | 'play' | 'hop' | 'explore' | 'nap'
 
-// The classic one is slow, lazy, a bit grumpy and fond of company; the fine one never sits still.
-export const TRAITS: [Trait, Trait] = [
+// The classic one is slow, lazy, a bit grumpy and fond of company; the fine one never sits still;
+// Pip, the youngest, is cheerful, clingy and quick, but tires sooner than the fine one.
+export const TRAITS: [Trait, Trait, Trait] = [
   { speed: 0.8, lazy: 0.35, hyper: 0, sociable: 0.7, moodBase: -0.05, stamina: 0.6 },
   { speed: 1.25, lazy: 0, hyper: 0.35, sociable: 1, moodBase: 0.2, stamina: 2.5 },
+  { speed: 1.05, lazy: 0.1, hyper: 0.2, sociable: 1.3, moodBase: 0.3, stamina: 1.2 },
 ]
 
 export const RESTED: Needs = { energy: 1, boredom: 0.2, social: 0.3, curiosity: 0.3, mood: 0 }
