@@ -50,6 +50,8 @@ export const parseOrder = (text: string, id: number): Order | null => {
 
 const MODEL = 'sonnet' // haiku is cheaper, sonnet a little funnier
 let model = MODEL // `/clawd model <name>` swaps it, kept in the store
+let lang = '' // `/clawd lang <language>`; empty: the language the person writes in
+const langRule = () => (lang ? `Язык реплик задал человек: ${lang}. Это важнее правила про язык.` : '')
 const MOODS = ['happy', 'sad', 'tired', 'curious', 'grumpy'] as const
 
 const isHidden = atom({ plugin: 'clawd-runner', key: 'isHidden' } as const, false)
@@ -159,6 +161,7 @@ async function remark($: EngineInterface, m: Mind, now: number, typing: boolean)
     files.length ? `Файлы, с которыми работал агент: ${files.join(', ')}` : '',
     commands.length ? `Команды: ${commands.join(' ; ')}` : '',
     thoughts.length ? `Уже говорили (не повторяйся): ${thoughts.join(' | ')}` : '',
+    langRule(),
     reply ? `${lastSaid?.who === 0 ? 'Клод' : 'Гладкий'} только что сказал: «${lastSaid?.text}». Пусть ${lastSaid?.who === 0 ? 'Гладкий (who 1)' : 'Клод (who 0)'} ответит ему, как в разговоре двух друзей.`
     : typing ? 'Человек сейчас печатает. Отреагируй именно на то, что он пишет: подколи, подбодри или ответь по сути, будто подглядываешь через плечо.'
     : working ? 'Агент сейчас работает. Прокомментируй, что он делает: последние команды, файлы, ошибки.' : '',
@@ -213,6 +216,7 @@ async function deep($: EngineInterface) {
         feelings.length === 2 ? `Сейчас Клод ${feelings[0]}; Гладкий ${feelings[1]}.` : '',
         lastWho !== null ? `Последним говорил ${lastWho === 0 ? 'Клод' : 'Гладкий'}; теперь скорее очередь другого.` : '',
         thoughts.length ? `Уже говорили (не повторяйся): ${thoughts.join(' | ')}` : '',
+        langRule(),
         'Это глубокая реплика: вспомни что-то конкретное из всей этой сессии — давнее решение, переделку, странную просьбу человека — и съязви по этому поводу, связав с тем, что происходит сейчас.',
       ].filter(Boolean).join('\n\n'),
     })
@@ -232,7 +236,7 @@ async function deep($: EngineInterface) {
 
 async function obey($: EngineInterface, text: string) {
   note(`человек приказал: ${text}`)
-  const r = await $.model.complete({ model, effort: 'low', maxTokens: 200, timeoutMs: 20000, system: ORDER_SYSTEM, prompt: text })
+  const r = await $.model.complete({ model, effort: 'low', maxTokens: 200, timeoutMs: 20000, system: [ORDER_SYSTEM, langRule()].filter(Boolean).join(' '), prompt: text })
   await spent($, r.usage)
   if (!r.isAnswered) {
     $.ui.toast(`Clawd: the model did not answer (${r.reason})`)
@@ -250,12 +254,13 @@ export const register: Register = on => {
   on('session.start', async ($, e, next) => {
     await $.command.register({
       name: 'clawd',
-      description: 'Hide or show Clawd; "/clawd talk" or "/clawd quiet" turns their remarks on or off; "/clawd model <name>" picks the model for them; anything else is an order to them',
-      argumentHint: '[talk | quiet | stats | model <name> | order]',
+      description: 'Hide or show Clawd; "/clawd talk" or "/clawd quiet" turns their remarks on or off; "/clawd model <name>" picks the model for them; "/clawd lang <language>" the language; anything else is an order to them',
+      argumentHint: '[talk | quiet | stats | model <name> | lang <language> | order]',
     })
     const stored = Boolean(await $.store.get('isHidden'))
     const talk = ((await $.store.get('talking')) ?? true) !== false
     model = ((await $.store.get('model')) as string | null) ?? MODEL
+    lang = ((await $.store.get('lang')) as string | null) ?? ''
     if (talk) lastThought = Date.now() - THINK_EVERY + 20_000 // first remark soon after start
     const memory = await recall($)
     const back = memory.lastSeen > 0 && Date.now() - memory.lastSeen > AWAY
@@ -286,6 +291,13 @@ export const register: Register = on => {
       await $.store.set('model', name)
       complained = false
       return { text: `The Clawds will talk through ${name} now.` }
+    }
+    if (arg === 'lang' || arg.startsWith('lang ')) {
+      const name = arg.slice('lang'.length).trim()
+      if (!name) return { text: lang ? `The Clawds speak ${lang}.` : 'The Clawds speak the language you write in.' }
+      lang = name === 'auto' ? '' : name
+      await $.store.set('lang', lang)
+      return { text: lang ? `The Clawds will speak ${lang} now.` : 'The Clawds will speak the language you write in.' }
     }
     if (arg === 'stats') {
       const u = (await $.store.get('usage')) as Usage | null

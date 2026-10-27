@@ -15,5 +15,6 @@ comment on your work, in the language you write to the agent in.
 - `/clawd` hides or shows them
 - `/clawd quiet` / `/clawd talk` turns their remarks off or on; each remark is a small model call
 - `/clawd stats` shows today's calls and tokens
+- `/clawd lang <language>` sets the language of their remarks (`English`, `Deutsch`, anything the model understands); `/clawd lang auto` goes back to the language you write in
 - `/clawd model <name>` picks the model for their remarks (`haiku`, `sonnet`, a full model id); `/clawd model` shows the current one. Default: `sonnet`. The once-a-turn remark that recalls the whole session runs on the session's own model
 - `/clawd <anything else>` is an order to them: "dance", "go to the corners", "come here"
