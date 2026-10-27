@@ -1,7 +1,7 @@
 import type { Pose, State } from './clawd'
 
-// Pip, the youngest: the fine Clawd's quadrant blocks on a smaller body, with eyes that show
-// how he feels and a mouth that moves while he talks.
+// Pip, the youngest: the fine Clawd's quadrant blocks on a smaller body, his eyes, and a mouth
+// that opens while he talks.
 const W = 20 // pixels, two per cell
 const H = 8 // pixels, two per text row; the top two are room to jump
 const EYES = { ahead: [6, 12], left: [5, 11], right: [7, 13] }
@@ -9,17 +9,10 @@ const EAR_ROWS = { up: [0, 1], mid: [1, 2], down: [2, 3] }
 const LEG_COLS = [4, 7, 11, 14] // each leg two pixels wide, as wide as an eye or an ear
 const QUADRANTS = ' ▘▝▀▖▌▞▛▗▚▐▜▄▙▟█'
 
-export type Face = { eyes: 'plain' | 'wide' | 'happy' | 'narrow'; mouth: 0 | 1 | 2 }
+export type Face = { open: boolean }
 
-export const face = (s: State): Face => ({
-  eyes:
-    s.emote === 'startle' || s.emote === 'curious' ? 'wide'
-    : s.emote === 'dance' || s.emote === 'love' || s.mode === 'cheer' || s.needs.mood > 0.45 ? 'happy'
-    : s.needs.mood < -0.25 ? 'narrow'
-    : 'plain',
-  // Talking: shut, half open, open, half open, over and over.
-  mouth: s.say ? ([0, 1, 2, 1] as const)[Math.floor(s.step / 2) % 4]! : 0,
-})
+// Talking: open and shut, over and over.
+export const face = (s: State): Face => ({ open: s.say !== null && Math.floor(s.step / 3) % 2 === 0 })
 
 export const drawPip = (p: Pose, f: Face, lean: number, dir: 1 | -1): string[] => {
   const px = new Array<boolean>(W * H).fill(false)
@@ -36,21 +29,12 @@ export const drawPip = (p: Pose, f: Face, lean: number, dir: 1 | -1): string[] =
   for (const r of EAR_ROWS[p.earR]) { set(r, W - 4); set(r, W - 3) }
   if (!p.shut) {
     const row = p.eyeRow === 0 ? 0 : 1
-    EYES[p.look].forEach((c, i) => {
-      if (f.eyes === 'happy') {
-        // ^: an arch over two low corners.
-        set(1, c, false); set(1, c + 1, false); set(2, c - 1, false); set(2, c + 2, false)
-      } else if (f.eyes === 'wide') {
-        for (const r of [1, 2]) { set(r, c, false); set(r, c + 1, false) }
-      } else if (f.eyes === 'narrow') {
-        set(row, i === 0 ? c + 1 : c, false) // the inner halves only: a frown
-      } else {
-        set(row, c, false); set(row, c + 1, false)
-      }
-    })
+    for (const c of EYES[p.look]) { set(row, c, false); set(row, c + 1, false) }
   }
-  // Under the eyes; wide open, it reaches the chin.
-  if (f.mouth > 0) for (let r = 2; r <= (f.mouth === 2 ? 3 : 2); r++) { set(r, 9, false); set(r, 10, false) }
+  // A small mouth under the eyes; talking, it opens wider and down to the chin.
+  const centre = (EYES[p.look][0]! + EYES[p.look][1]!) / 2 + 1
+  set(2, centre - 1, false); set(2, centre, false)
+  if (f.open) { set(2, centre - 2, false); set(2, centre + 1, false); set(3, centre - 1, false); set(3, centre, false) }
   LEG_COLS.forEach((c, i) => {
     set(4, c); set(4, c + 1)
     // A lifted leg bends back by half its width, away from where he is going.
