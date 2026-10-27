@@ -49,6 +49,7 @@ export const parseOrder = (text: string, id: number): Order | null => {
 }
 
 const MODEL = 'sonnet' // haiku is cheaper, sonnet a little funnier
+let model = MODEL // `/clawd model <name>` swaps it, kept in the store
 const MOODS = ['happy', 'sad', 'tired', 'curious', 'grumpy'] as const
 
 const isHidden = atom({ plugin: 'clawd-runner', key: 'isHidden' } as const, false)
@@ -163,7 +164,7 @@ async function remark($: EngineInterface, m: Mind, now: number, typing: boolean)
     : working ? 'Агент сейчас работает. Прокомментируй, что он делает: последние команды, файлы, ошибки.' : '',
   ].filter(Boolean).join('\n')
   const r = await $.model.complete({
-    model: MODEL,
+    model,
     effort: 'low',
     maxTokens: 160,
     timeoutMs: 15000,
@@ -231,7 +232,7 @@ async function deep($: EngineInterface) {
 
 async function obey($: EngineInterface, text: string) {
   note(`человек приказал: ${text}`)
-  const r = await $.model.complete({ model: MODEL, effort: 'low', maxTokens: 200, timeoutMs: 20000, system: ORDER_SYSTEM, prompt: text })
+  const r = await $.model.complete({ model, effort: 'low', maxTokens: 200, timeoutMs: 20000, system: ORDER_SYSTEM, prompt: text })
   await spent($, r.usage)
   if (!r.isAnswered) {
     $.ui.toast(`Clawd: the model did not answer (${r.reason})`)
@@ -249,11 +250,12 @@ export const register: Register = on => {
   on('session.start', async ($, e, next) => {
     await $.command.register({
       name: 'clawd',
-      description: 'Hide or show Clawd; "/clawd talk" or "/clawd quiet" turns their remarks on or off; anything else is an order to them',
-      argumentHint: '[talk | quiet | stats | order]',
+      description: 'Hide or show Clawd; "/clawd talk" or "/clawd quiet" turns their remarks on or off; "/clawd model <name>" picks the model for them; anything else is an order to them',
+      argumentHint: '[talk | quiet | stats | model <name> | order]',
     })
     const stored = Boolean(await $.store.get('isHidden'))
     const talk = ((await $.store.get('talking')) ?? true) !== false
+    model = ((await $.store.get('model')) as string | null) ?? MODEL
     if (talk) lastThought = Date.now() - THINK_EVERY + 20_000 // first remark soon after start
     const memory = await recall($)
     const back = memory.lastSeen > 0 && Date.now() - memory.lastSeen > AWAY
@@ -277,10 +279,18 @@ export const register: Register = on => {
 
       return { text: talk ? 'The Clawds will think out loud now and then (a haiku call every few minutes).' : 'The Clawds keep their thoughts to themselves.' }
     }
+    if (arg === 'model' || arg.startsWith('model ')) {
+      const name = arg.slice('model'.length).trim()
+      if (!name) return { text: `The Clawds talk through ${model}.` }
+      model = name
+      await $.store.set('model', name)
+      complained = false
+      return { text: `The Clawds will talk through ${name} now.` }
+    }
     if (arg === 'stats') {
       const u = (await $.store.get('usage')) as Usage | null
       if (!u || u.day !== today()) return { text: 'The Clawds have said nothing today.' }
-      return { text: `Today the Clawds made ${u.calls} ${MODEL} calls: ${u.input} tokens in, ${u.output} out.` }
+      return { text: `Today the Clawds made ${u.calls} model calls: ${u.input} tokens in, ${u.output} out.` }
     }
     if (arg) {
       void obey($, arg)
