@@ -10,16 +10,19 @@ const THINK_SOONER = 8 * 1000 // after something worth a remark
 const REPLY = 12 * 1000 // a remark this fresh may get an answer from the other one
 const LONG_DRAFT = 90 * 1000
 // While the person types they read over his shoulder; while the agent works they watch it.
-const TYPING_GAP = 2 * 1000
+const TYPING_GAP = 15 * 1000
 const WORKING_GAP = 5 * 1000
-const TYPING = 3 * 1000 // an edit this recent means typing now
+const TYPING = 10 * 1000 // an edit this recent means typing now
+const PAUSE = 2 * 1000 // a draft is remarked on once the person stops for this long
+const IDLE = 5 * 60 * 1000 // nobody around this long: they keep quiet till someone is back
+const DEEP_EVERY = 5 // turns between remarks from a fork of the whole session
 const DRAFT_MIN = 15 // characters worth a remark
 const MANY_FIXES = 15 // deletions in one draft
 // Who they are and how they talk; tuned on sample contexts with claude -p --model haiku.
 const SYSTEM = "Ты пишешь реплики двух крошечных пиксельных крабиков, которые живут над полем ввода в терминале и смотрят, как человек работает с ИИ-агентом над кодом.\n\nЭто два противных гномика с чудовищно раздутым эго. Мнят себя непризнанными гениями и аристократами духа, человека и агента держат за бестолковых подмастерьев. Говорят снисходительно, напыщенно, с барским высокомерием, как обиженные профессора и капризные критики. Смешно за счёт самодовольства, высокопарности не к месту, язвительной вежливости и абсурдной уверенности в себе. Не быдло: никакого гопнического тона и мата-паразита в конце фразы. Крепкое словцо допустимо изредка, только если оно и есть соль шутки, и стоит внутри фразы, а не для связки.\n\nКлод (who 0): усталый сноб, сухо и брезгливо, «я бы сделал безупречно, но не снизойду».\nГладкий (who 1): напыщенный выскочка, считает себя легендой, хвастается не к месту, несёт чушь с видом гения, подначивает Клода.\n\nКак писать:\n- Цепляйся за конкретику из контекста: слово из черновика, имя файла, команду, число ошибок, время, счёт в догонялках. Реплика без конкретики — плохая.\n- Запрещено: «Ура», «Интересно», «Давай», «Я верю», «Вперёд», «Отлично», пересказ контекста, пустая бодрость, мат в конце фразы для связки.\n- До 90 символов: одна-две короткие фразы, мысль должна успеть сложиться. Без кавычек и эмодзи.\n- Язык реплики — тот, на котором человек пишет агенту (его сообщения и черновик ниже); если его текстов нет — английский. Не по-русски имена — Clawd и Sleek.\n\nПримеры тона (не копируй):\n- «Четвёртый npm test. Я бы обошёлся интуицией»\n- «Стёр больше, чем написал. Почти редактура»\n- «tower.ts? Позвольте, я не прикасаюсь к черни»\n- «Пять-три в догонялки. Клод, это закономерно»\n- «Шесть вечера, а он всё о нас. Вкус есть»\n\nСначала молча придумай три разных варианта, потом выбери самый смешной и конкретный.\nОтветь только JSON без пояснений: {\"who\":0|1,\"say\":\"...\",\"mood\":\"happy|sad|tired|curious|grumpy\"}"
 // A message that opens by calling them goes to them, not to the agent.
 // Not a bare "Клод": that may be the person talking to the agent.
-const CALLED = /^\s*(гном[а-яё]*|краб[а-яё]*|клоды|гладк[а-яё]*|clawds)\s*[,!:—-]\s*/i
+const CALLED = /^\s*(гном[а-яё]*|краб[а-яё]*|клоды|гладк[а-яё]*|clawds|sleek|crabs?|guys)\s*[,!:—-]\s*/i
 // The person talks to the agent in the singular; opening with a plural command is for them ("разойдитесь…").
 const PLURAL = /^\s*(?!давайте|смотрите|скажите)[а-яё]+(йте|ите|ьте)(сь)?(\s|[,.!]|$)/i
 const toThem = (text: string) => CALLED.test(text) || PLURAL.test(text)
@@ -107,6 +110,8 @@ let draftStart = 0
 let fixes = 0
 let draft = ''
 let lastEdit = 0
+let lastActivity = Date.now()
+let turns = 0
 let working = false
 let thinking = false // one model call at a time
 const said: string[] = []
@@ -131,7 +136,9 @@ async function think($: EngineInterface) {
   const now = Date.now()
   if (thinking || !m.talk || (await read($, isHidden))) return
   if ((await $.session.surfaces()).length === 0) return // claude -p and the like: nobody to show a remark to
+  if (!working && now - lastActivity > IDLE) return
   const typing = now - lastEdit < TYPING && draft.length >= DRAFT_MIN
+  if (typing && now - lastEdit < PAUSE) return
   const gap = typing ? TYPING_GAP : working ? WORKING_GAP : remarkable ? THINK_SOONER : THINK_EVERY
   if (now - lastThought < gap) return
   lastThought = now
@@ -152,7 +159,8 @@ async function remark($: EngineInterface, m: Mind, now: number, typing: boolean)
   const project = (await $.session.cwd()).split('/').pop() ?? ''
   const prompt = [
     `Проект: ${project}. Сейчас ${new Date().toTimeString().slice(0, 5)}. Ошибок команд сегодня: ${memory.errors}.`,
-    `Счёт в догонялки: Клод ${memory.wins[0]}, Гладкий ${memory.wins[1]}.`,
+    // The score only now and then, or right after a game: otherwise it is all they talk about.
+    events.some(x => x.includes('догонялк')) || Math.random() < 0.15 ? `Счёт в догонялки: Клод ${memory.wins[0]}, Гладкий ${memory.wins[1]}.` : '',
     lastWho !== null && !reply ? `Последним говорил ${lastWho === 0 ? 'Клод' : 'Гладкий'}; теперь скорее очередь другого.` : '',
     feelings.length === 2 ? `Сейчас Клод ${feelings[0]}; Гладкий ${feelings[1]}. Говорят в этом настроении.` : '',
     `Что было недавно:\n${events.join('\n') || 'ничего особенного'}`,
@@ -338,6 +346,7 @@ export const register: Register = on => {
     }
     draft = box.text
     lastEdit = now
+    lastActivity = now
 
     return box
   })
@@ -349,6 +358,7 @@ export const register: Register = on => {
     }
     await update($, pulse, p => ({ ...p, submit: p.submit + 1 }))
     note('человек отправил сообщение агенту')
+    lastActivity = Date.now()
     working = true
     keep(said, tail(e.text.replace(/\s+/g, ' '), 200), 3)
     draft = ''
@@ -361,8 +371,10 @@ export const register: Register = on => {
   on('turn.complete', async ($, e, next) => {
     note('агент закончил отвечать')
     working = false
-    // A moment after the turn, when the session holds its snapshot to fork from.
-    $.clock.after(1500, () => void deep($))
+    lastActivity = Date.now()
+    // A moment after the turn, when the session holds its snapshot to fork from; not every turn, it reads the whole session.
+    turns += 1
+    if (turns % DEEP_EVERY === 0) $.clock.after(1500, () => void deep($))
     const memory = await recall($)
     await $.store.set('memory', { ...memory, lastSeen: Date.now() })
 

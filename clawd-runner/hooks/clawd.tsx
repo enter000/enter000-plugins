@@ -150,9 +150,13 @@ export const tick = (s: State, p: Props, columns: number, hour = 12): State => {
   const typing = quiet < sec(3)
   const next = { ...base, seq: p.seq, quiet, left: s.left - 1, reading: false }
 
-  if (typed && !s.distracted && (s.mode === 'idle' || s.mode === 'sleep' || (s.mode === 'walk' && s.goal === null))) {
-    const watch = { ...next, mode: 'watch' as const, goal: null }
-    return s.mode === 'sleep' ? hop(watch) : watch // woke up with a start
+  // Typing wakes him reluctantly: rested, he stretches and gets up; worn out, he sleeps on.
+  if (typed && s.mode === 'sleep') {
+    if (needs.energy < 0.5) return next
+    return emote({ ...next, mode: 'idle', nap: false, left: sec(1.5) }, 'stretch', 1.2)
+  }
+  if (typed && !s.distracted && (s.mode === 'idle' || (s.mode === 'walk' && s.goal === null))) {
+    return { ...next, mode: 'watch' as const, goal: null }
   }
   if (s.mode === 'sleep') {
     if (!s.nap || needs.energy < 0.95) return next

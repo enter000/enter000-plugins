@@ -186,7 +186,8 @@ const paint = (line: Cell[], x: number, text: string, dim: boolean, opaque = fal
 }
 
 type Span = { row: number; from: number; to: number }
-const clash = (a: Span, b: Span) => a.row === b.row && a.from < b.to && b.from < a.to
+// A column apart at least, so two remarks never read as one.
+const clash = (a: Span, b: Span) => a.row === b.row && a.from <= b.to && b.from <= a.to
 
 // Beside him on the right, then on the left, then over his head: the first spot that fits on screen
 // and covers neither Clawd nor the other's words; failing that, the first that fits.
@@ -259,7 +260,9 @@ const Clawds: ClientModule<Props, Pair> = (props, surface) => {
       if (thought && thought.id > seen.thought) {
         seen.thought = thought.id
         const change = { happy: { mood: 0.2 }, sad: { mood: -0.2 }, tired: { energy: -0.1 }, curious: { curiosity: 0.2 }, grumpy: { mood: -0.1 } }[thought.mood]
-        pals[thought.who] = { ...pals[thought.who], say: { text: thought.text, left: readTime(thought.text), at: stopsAt(pals[thought.who]) }, needs: nudge(pals[thought.who].needs, change) }
+        // A sleeper does not talk: the other one says it, or nobody if both are asleep.
+        const who = pals[thought.who].mode !== 'sleep' ? thought.who : pals[1 - thought.who as 0 | 1].mode !== 'sleep' ? (1 - thought.who) as 0 | 1 : null
+        if (who !== null) pals[who] = { ...pals[who], say: { text: thought.text, left: readTime(thought.text), at: stopsAt(pals[who]) }, needs: nudge(pals[who].needs, change) }
       }
       // Whoever is talking stops strolling to say it; an errand (a goal: an order, a chase) he finishes talking.
       pals = pals.map(s => (s.say && s.mode === 'walk' && s.goal === null ? { ...s, mode: 'idle', left: Math.max(s.left, sec(1)) } : s)) as [State, State]
@@ -301,11 +304,21 @@ const Clawds: ClientModule<Props, Pair> = (props, surface) => {
   for (const [s] of sprites) {
     const mark = side(s) ?? ''
     if (!mark) continue
-    const rows = wrap(mark)
-    const length = Math.max(...rows.map(row => Array.from(row).length))
     // Pinned where he would stop, which can lie past the edge he stops at.
     const anchor = Math.max(0, Math.min(width - W - EXTRA, s.say ? s.say.at : Math.round(s.x)))
-    const spots = rows.length === 1 ? [placeMark(anchor, length, width, taken)] : placeBubble(anchor, length, width, taken)
+    const place = (rows: string[]) => {
+      const length = Math.max(...rows.map(row => Array.from(row).length))
+      return { length, spots: rows.length === 1 ? [placeMark(anchor, length, width, taken)] : placeBubble(anchor, length, width, taken) }
+    }
+    let rows = wrap(mark)
+    let { length, spots } = place(rows)
+    // Pushed away from him by the other's words: an arrow on the first line points back at him.
+    const far = (spot: Span) => (spot.from > anchor ? spot.from - (anchor + W) : anchor - spot.to) > 3
+    if (s.say && far(spots[0]!)) {
+      ;({ length, spots } = place(rows.map((row, i) => (i === 0 ? '  ' + row : row))))
+      const right = spots[0]!.from > anchor
+      rows = rows.map((row, i) => (i > 0 ? row : right ? '← ' + row : row.padEnd(length - 2) + ' →'))
+    }
     spots.forEach((spot, i) => {
       taken.push(spot)
       paint(lines[spot.row] ?? [], spot.from, (rows[i] ?? '').padEnd(length), true, true)
