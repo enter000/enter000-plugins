@@ -2,7 +2,7 @@ import type { ClientModule } from 'claude-code'
 
 import { ACCEL, born, chance, draw, emote, EXTRA, FALL_ASLEEP, hop, JUMP, pose, sec, side, tick, TICK, W } from './clawd'
 import type { Look, Props, State } from './clawd'
-import type { Order } from '../types'
+import type { Action, Order } from '../types'
 import { drawHd, lean } from './clawd-hd'
 import { nudge } from './mind'
 
@@ -10,7 +10,7 @@ import { nudge } from './mind'
 // tick; on top of that they notice each other, say hello, play tag and copy jumps.
 type Game = { kind: 'greet' | 'chase' | 'leap'; it: 0 | 1; left: number } | null
 // seen: the welcome and thought counters already acted on.
-type Pair = { pals: [State, State]; game: Game; cooldown: number; seen: { welcome: number; thought: number; order: number } }
+type Pair = { pals: [State, State]; game: Game; cooldown: number; seen: { welcome: number; thought: number; order: number; noticed: number; snub: number } }
 export type Outcome = { winner: 0 | 1 } | null
 
 const COLOR = '#D97757'
@@ -37,14 +37,13 @@ const toward = (s: State, other: State): Look => (other.x > s.x ? 'right' : 'lef
 const stopsAt = (s: State) => Math.round(s.x + (s.v * Math.abs(s.v)) / (2 * ACCEL))
 const readTime = (text: string) => sec(Math.min(9, 3 + text.length / 15))
 
-// Carry out an order; the replies show at once, one bubble each.
-export const obey = (pair: Pair, order: Order, columns: number, cursor: number): Pair => {
+// One action, for an order or along with a remark; i says which corner and which side is his.
+export const perform = (s: State, i: 0 | 1, action: Action, columns: number, cursor: number): State => {
   const max = Math.max(0, columns - W - EXTRA)
   const go = (s: State, goal: number): State =>
     ({ ...s, mode: 'walk', goal: Math.min(max, Math.max(0, goal)), speed: 1.1, left: sec(10), distracted: true, intent: null, emote: null })
   const middle = Math.round(max / 2)
-  const act = (s: State, i: 0 | 1): State => {
-    switch (order.action) {
+  switch (action) {
       case 'corners': return go(s, i === 0 ? 0 : max)
       case 'together': return go(s, middle + (i === 0 ? -6 : 6))
       case 'come': return go(s, cursor - W / 2 + (i === 0 ? -6 : 6))
@@ -55,9 +54,12 @@ export const obey = (pair: Pair, order: Order, columns: number, cursor: number):
       case 'chase': return { ...s, mode: 'idle', goal: null, left: sec(2), intent: i === 0 ? 'play' : null, emote: null }
       case 'wander': return { ...s, mode: 'idle', goal: null, left: 0, distracted: false }
       case 'refuse': return emote({ ...s, mode: 'idle', goal: null, left: sec(2) }, 'startle', 1)
-    }
   }
-  let pals = pair.pals.map((s, i) => (order.who === 2 || order.who === i ? act(s, i as 0 | 1) : s)) as [State, State]
+}
+
+// Carry out an order; the replies show at once, one bubble each.
+export const obey = (pair: Pair, order: Order, columns: number, cursor: number): Pair => {
+  let pals = pair.pals.map((s, i) => (order.who === 2 || order.who === i ? perform(s, i as 0 | 1, order.action, columns, cursor) : s)) as [State, State]
   for (const reply of order.replies) {
     pals[reply.who] = { ...pals[reply.who], say: { text: reply.text, left: readTime(reply.text), at: stopsAt(pals[reply.who]) } }
   }
@@ -243,7 +245,10 @@ const Clawds: ClientModule<Props, Pair> = (props, surface) => {
   if (surface.state === undefined) {
     surface.setState({
       pals: [born(props, 0), { ...born(props, 1), x: 40, dir: -1 }], game: null, cooldown: sec(5),
-      seen: { welcome: props.mind?.welcome ?? 0, thought: props.mind?.thought?.id ?? 0, order: props.mind?.order?.id ?? 0 },
+      seen: {
+        welcome: props.mind?.welcome ?? 0, thought: props.mind?.thought?.id ?? 0, order: props.mind?.order?.id ?? 0,
+        noticed: props.mind?.noticed ?? 0, snub: props.mind?.snub ?? 0,
+      },
     })
     surface.every(TICK, () => {
       const pair = surface.state!
@@ -262,7 +267,19 @@ const Clawds: ClientModule<Props, Pair> = (props, surface) => {
         const change = { happy: { mood: 0.2 }, sad: { mood: -0.2 }, tired: { energy: -0.1 }, curious: { curiosity: 0.2 }, grumpy: { mood: -0.1 } }[thought.mood]
         // A sleeper does not talk: the other one says it, or nobody if both are asleep.
         const who = pals[thought.who].mode !== 'sleep' ? thought.who : pals[1 - thought.who as 0 | 1].mode !== 'sleep' ? (1 - thought.who) as 0 | 1 : null
-        if (who !== null) pals[who] = { ...pals[who], say: { text: thought.text, left: readTime(thought.text), at: stopsAt(pals[who]) }, needs: nudge(pals[who].needs, change) }
+        if (who !== null) {
+          const acted = thought.act ? perform(pals[who], who, thought.act, surface.columns, 2 + p.col) : pals[who]
+          pals[who] = { ...acted, say: { text: thought.text, left: readTime(thought.text), at: stopsAt(pals[who]) }, needs: nudge(acted.needs, change) }
+        }
+      }
+      // Spoken to: pleased to be noticed, they turn to the prompt. Silenced mid-remark: they sulk a while.
+      if ((p.mind?.noticed ?? 0) > seen.noticed) {
+        seen.noticed = p.mind?.noticed ?? 0
+        pals = pals.map(s => ({ ...s, needs: nudge(s.needs, { mood: 0.3, social: -0.3 }) })) as [State, State]
+      }
+      if ((p.mind?.snub ?? 0) > seen.snub) {
+        seen.snub = p.mind?.snub ?? 0
+        pals = pals.map(s => emote({ ...s, needs: nudge(s.needs, { mood: -0.5 }) }, 'sit', 4)) as [State, State]
       }
       // Whoever is talking stops strolling to say it; an errand (a goal: an order, a chase) he finishes talking.
       pals = pals.map(s => (s.say && s.mode === 'walk' && s.goal === null ? { ...s, mode: 'idle', left: Math.max(s.left, sec(1)) } : s)) as [State, State]

@@ -25,6 +25,10 @@ agent touches, the commands that failed, the time of day. They are two pompous s
 they would have written it better. Remarks come in the language you write to the agent in, or one
 you set.
 
+They act out what they say: the snob sits down in disgust, the braggart jumps. They remember a few
+things across days, like the day tests passed after a long run of failures, and bring them up now
+and then. Talk to them and they cheer up; silence them right after a remark and they sulk.
+
 ### Commands
 
 - `/clawd` hides or shows them
