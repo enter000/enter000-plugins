@@ -1,7 +1,7 @@
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
 
-import type { Action, Memory, Mind, Order, Pulse, Thought } from '../types'
+import type { Action, Memory, Mind, Order, Pulse, Thought, Who } from '../types'
 
 const TESTS = /\b(test|tests|vitest|jest|pytest|playwright|mocha)\b/
 const AWAY = 4 * 60 * 60 * 1000 // back after this long: the Clawds run to say hello
@@ -19,19 +19,23 @@ const DEEP_EVERY = 5 // turns between remarks from a fork of the whole session
 const DRAFT_MIN = 15 // characters worth a remark
 const MANY_FIXES = 15 // deletions in one draft
 // Who they are and how they talk; tuned on sample contexts with claude -p --model haiku.
-const SYSTEM = "Ты пишешь реплики двух крошечных пиксельных крабиков, которые живут над полем ввода в терминале и смотрят, как человек работает с ИИ-агентом над кодом.\n\nЭто два противных гномика с чудовищно раздутым эго. Мнят себя непризнанными гениями и аристократами духа, человека и агента держат за бестолковых подмастерьев. Говорят снисходительно, напыщенно, с барским высокомерием, как обиженные профессора и капризные критики. Смешно за счёт самодовольства, высокопарности не к месту, язвительной вежливости и абсурдной уверенности в себе. Не быдло: никакого гопнического тона и мата-паразита в конце фразы. Крепкое словцо допустимо изредка, только если оно и есть соль шутки, и стоит внутри фразы, а не для связки.\n\nКлод (who 0): усталый сноб, сухо и брезгливо, «я бы сделал безупречно, но не снизойду».\nГладкий (who 1): напыщенный выскочка, считает себя легендой, хвастается не к месту, несёт чушь с видом гения, подначивает Клода.\n\nКак писать:\n- Цепляйся за конкретику из контекста: о чём человек пишет, имя файла, команду, число ошибок, время, счёт в догонялках. Реплика без конкретики — плохая.\n- Опечатки, стирания и оборванные фразы — тема на крайний случай, не чаще одной реплики из десяти: черновик ещё не дописан. Смейся над смыслом — над тем, что он просит, что делает агент, который час.\n- Запрещено: «Ура», «Интересно», «Давай», «Я верю», «Вперёд», «Отлично», пересказ контекста, пустая бодрость, мат в конце фразы для связки.\n- До 90 символов: одна-две короткие фразы, мысль должна успеть сложиться. Без кавычек и эмодзи.\n- Язык реплики — тот, на котором человек пишет агенту (его сообщения и черновик ниже); если его текстов нет — английский. Не по-русски имена — Clawd и Sleek.\n\nПримеры тона (не копируй):\n- «Четвёртый npm test. Я бы обошёлся интуицией»\n- «Третий раз про отступы. Я бы назвал это стилем»\n- «tower.ts? Позвольте, я не прикасаюсь к черни»\n- «Пять-три в догонялки. Клод, это закономерно»\n- «Шесть вечера, а он всё о нас. Вкус есть»\n\nСначала молча придумай три разных варианта, потом выбери самый смешной и конкретный.\nact — что он делает, пока говорит, если это усиливает шутку: sit (брезгливо сел), jump (хвастается), dance (торжествует), come (подошёл посмотреть на черновик), corners (обиженно ушёл в свой угол), sleep (демонстративно лёг спать), refuse (вздрогнул от возмущения); чаще всего none.\nОтветь только JSON без пояснений: {\"who\":0|1,\"say\":\"...\",\"mood\":\"happy|sad|tired|curious|grumpy\",\"act\":\"none|sit|jump|dance|come|corners|sleep|refuse\"}"
+const SYSTEM = "Ты пишешь реплики трёх крошечных пиксельных крабиков, которые живут над полем ввода в терминале и смотрят, как человек работает с ИИ-агентом над кодом.\n\nДвое старших — противные гномики с чудовищно раздутым эго. Мнят себя непризнанными гениями и аристократами духа, человека и агента держат за бестолковых подмастерьев. Говорят снисходительно, напыщенно, с барским высокомерием, как обиженные профессора и капризные критики. Смешно за счёт самодовольства, высокопарности не к месту, язвительной вежливости и абсурдной уверенности в себе. Не быдло: никакого гопнического тона и мата-паразита в конце фразы. Крепкое словцо допустимо изредка, только если оно и есть соль шутки, и стоит внутри фразы, а не для связки.\n\nКлод (who 0): усталый сноб, сухо и брезгливо, «я бы сделал безупречно, но не снизойду».\nГладкий (who 1): напыщенный выскочка, считает себя легендой, хвастается не к месту, несёт чушь с видом гения, подначивает Клода.\nПип (who 2): младший, новичок-подлиза. Боготворит обоих снобов, поддакивает, всё путает, пытается подражать их высокомерию и выходит смешно; старшие его снисходительно терпят.\n\nКак писать:\n- Цепляйся за конкретику из контекста: о чём человек пишет, имя файла, команду, число ошибок, время, счёт в догонялках. Реплика без конкретики — плохая.\n- Опечатки, стирания и оборванные фразы — тема на крайний случай, не чаще одной реплики из десяти: черновик ещё не дописан. Смейся над смыслом — над тем, что он просит, что делает агент, который час.\n- Запрещено: «Ура», «Интересно», «Давай», «Я верю», «Вперёд», «Отлично», пересказ контекста, пустая бодрость, мат в конце фразы для связки.\n- До 90 символов: одна-две короткие фразы, мысль должна успеть сложиться. Без кавычек и эмодзи.\n- Язык реплики — тот, на котором человек пишет агенту (его сообщения и черновик ниже); если его текстов нет — английский. Не по-русски имена — Clawd, Sleek и Pip.\n\nПримеры тона (не копируй):\n- «Четвёртый npm test. Я бы обошёлся интуицией»\n- «Третий раз про отступы. Я бы назвал это стилем»\n- «tower.ts? Позвольте, я не прикасаюсь к черни»\n- «Пять-три в догонялки. Клод, это закономерно»\n- «Шесть вечера, а он всё о нас. Вкус есть»\n- «Клод, это гениально! А что такое npm?»\n\nСначала молча придумай три разных варианта, потом выбери самый смешной и конкретный.\nact — что он делает, пока говорит, если это усиливает шутку: sit (брезгливо сел), jump (хвастается), dance (торжествует), come (подошёл посмотреть на черновик), corners (обиженно ушёл в свой угол), sleep (демонстративно лёг спать), refuse (вздрогнул от возмущения); чаще всего none.\nОтветь только JSON без пояснений: {\"who\":0|1|2,\"say\":\"...\",\"mood\":\"happy|sad|tired|curious|grumpy\",\"act\":\"none|sit|jump|dance|come|corners|sleep|refuse\"}"
 // A message that opens by calling them goes to them, not to the agent.
 // Not a bare "Клод": that may be the person talking to the agent.
-const CALLED = /^\s*(гном[а-яё]*|краб[а-яё]*|клоды|гладк[а-яё]*|clawds|sleek|crabs?|guys)\s*[,!:—-]\s*/i
+const CALLED = /^\s*(гном[а-яё]*|краб[а-яё]*|клоды|гладк[а-яё]*|пип|clawds|sleek|pip|crabs?|guys)\s*[,!:—-]\s*/i
 // The person talks to the agent in the singular; opening with a plural command is for them ("разойдитесь…").
 const PLURAL = /^\s*(?!давайте|смотрите|скажите)[а-яё]+(йте|ите|ьте)(сь)?(\s|[,.!]|$)/i
 const toThem = (text: string) => CALLED.test(text) || PLURAL.test(text)
 const ACTIONS: Action[] = ['corners', 'together', 'come', 'sleep', 'dance', 'jump', 'sit', 'chase', 'wander', 'refuse']
 const ORDER_SYSTEM =
-  'Человек отдаёт приказ двум самодовольным пиксельным гномикам над терминалом: Клод (who 0, усталый брезгливый сноб) и Гладкий (who 1, напыщенный выскочка, мнит себя легендой). Оба с раздутым эго, человека держат за подмастерье: отвечают снисходительно и высокопарно, без гопнического тона и мата для связки. ' +
+  'Человек отдаёт приказ трём пиксельным гномикам над терминалом: Клод (who 0, усталый брезгливый сноб), Гладкий (who 1, напыщенный выскочка, мнит себя легендой) и Пип (who 2, младший, новичок-подлиза, поддакивает старшим). Старшие с раздутым эго, человека держат за подмастерье: отвечают снисходительно и высокопарно, без гопнического тона и мата для связки. ' +
   'Переведи приказ в одно действие: corners (разойтись по углам), together (собраться вместе), come (подойти к полю ввода), sleep (спать), dance (танцевать), jump (прыгать), sit (сесть), chase (поиграть в догонялки), wander (гулять как хотят), refuse (отказаться, если приказ дурацкий или невыполним). ' +
-  'who: 0, 1 или 2 (оба), кому приказ. replies: одна или две реплики в ответ, до 90 символов, высокомерные и смешные, по делу приказа; если приказ обоим, пусть ответят оба. Реплики на языке приказа, не по-русски имена — Clawd и Sleek. ' +
-  'Ответь только JSON: {"action":"...","who":0|1|2,"replies":[{"who":0|1,"say":"..."}]}'
+  'who: 0, 1, 2 или "all" (всем), кому приказ. replies: одна-три реплики в ответ, до 90 символов, смешные, по делу приказа; если приказ всем, пусть ответят двое-трое. Реплики на языке приказа, не по-русски имена — Clawd, Sleek и Pip. ' +
+  'Ответь только JSON: {"action":"...","who":0|1|2|"all","replies":[{"who":0|1|2,"say":"..."}]}'
+
+const whoOf = (x: unknown): Who => (x === 1 || x === 2 ? x : 0)
+const NAMES = ['Клод', 'Гладкий', 'Пип']
+const others = (who: Who) => ([0, 1, 2] as Who[]).filter(i => i !== who)
 
 export const parseOrder = (text: string, id: number): Order | null => {
   const json = text.slice(text.indexOf('{'), text.lastIndexOf('}') + 1)
@@ -39,12 +43,12 @@ export const parseOrder = (text: string, id: number): Order | null => {
     const o = JSON.parse(json) as { action?: unknown; who?: unknown; replies?: unknown }
     const action = ACTIONS.find(a => a === o.action)
     if (!action) return null
-    const who = o.who === 0 || o.who === 1 ? o.who : 2
+    const who = o.who === 0 || o.who === 1 || o.who === 2 ? o.who : 'all'
     const replies = (Array.isArray(o.replies) ? o.replies : [])
       .map(x => x as { who?: unknown; say?: unknown })
       .filter(x => typeof x.say === 'string' && x.say.trim())
-      .slice(0, 2)
-      .map(x => ({ who: x.who === 1 ? (1 as const) : (0 as const), text: clip(String(x.say)) }))
+      .slice(0, 3)
+      .map(x => ({ who: whoOf(x.who), text: clip(String(x.say)) }))
     return { id, action, who, replies }
   } catch {
     return null
@@ -63,16 +67,18 @@ const pulse = atom({ plugin: 'clawd-runner', key: 'pulse' } as const, {
   seq: 0, col: 0, startle: 0, submit: 0, dance: 0, tools: 0,
 } satisfies Pulse)
 const mind = atom({ plugin: 'clawd-runner', key: 'mind' } as const, {
-  welcome: 0, gloom: 0, wins: [0, 0], thought: null, talk: false, order: null, noticed: 0, snub: 0,
+  welcome: 0, gloom: 0, wins: [0, 0, 0], thought: null, talk: false, order: null, noticed: 0, snub: 0,
 } satisfies Mind as Mind)
 
 const today = () => new Date().toISOString().slice(0, 10)
 const recall = async ($: EngineInterface): Promise<Memory> => {
   const m = (await $.store.get('memory')) as Partial<Memory> | null
-  const fresh = { lastSeen: 0, day: today(), errors: 0, wins: [0, 0] as [number, number], notes: [] as string[] }
+  const fresh = { lastSeen: 0, day: today(), errors: 0, wins: [0, 0, 0] as [number, number, number], notes: [] as string[] }
   if (!m) return fresh
   const sameDay = m.day === today()
-  return { ...fresh, ...m, day: today(), errors: sameDay ? (m.errors ?? 0) : 0 }
+  // Scores kept from before Pip have two numbers.
+  const wins: [number, number, number] = [m.wins?.[0] ?? 0, m.wins?.[1] ?? 0, m.wins?.[2] ?? 0]
+  return { ...fresh, ...m, wins, day: today(), errors: sameDay ? (m.errors ?? 0) : 0 }
 }
 const gloomOf = (errors: number) => Math.min(0.4, errors / 25)
 // Something to recall days later: the newest five are kept.
@@ -101,7 +107,7 @@ export const parseThought = (text: string, id: number): Thought | null => {
     const say = typeof t.say === 'string' ? clip(t.say) : ''
     const mood = MOODS.find(m => m === t.mood) ?? 'curious'
     const act = ACTS.find(a => a === t.act)
-    return say ? { id, who: t.who === 1 ? 1 : 0, text: say, mood, ...(act ? { act } : {}) } : null
+    return say ? { id, who: whoOf(t.who), text: say, mood, ...(act ? { act } : {}) } : null
   } catch {
     return null
   }
@@ -127,8 +133,8 @@ const said: string[] = []
 const files: string[] = []
 const commands: string[] = []
 const thoughts: string[] = []
-let lastSaid: { who: 0 | 1; text: string; at: number } | null = null
-let lastWho: 0 | 1 | null = null
+let lastSaid: { who: Who; text: string; at: number } | null = null
+let lastWho: Who | null = null
 let feelings: string[] = [] // what the drawing last said about each Clawd's state
 function keep(list: string[], item: string, size: number) {
   list.push(item)
@@ -168,9 +174,9 @@ async function remark($: EngineInterface, m: Mind, now: number, typing: boolean)
   const prompt = [
     `Проект: ${await project($)}. Сейчас ${new Date().toTimeString().slice(0, 5)}. Ошибок команд сегодня: ${memory.errors}.`,
     // The score only now and then, or right after a game: otherwise it is all they talk about.
-    events.some(x => x.includes('догонялк')) || Math.random() < 0.15 ? `Счёт в догонялки: Клод ${memory.wins[0]}, Гладкий ${memory.wins[1]}.` : '',
-    lastWho !== null && !reply ? `Последним говорил ${lastWho === 0 ? 'Клод' : 'Гладкий'}; теперь скорее очередь другого.` : '',
-    feelings.length === 2 ? `Сейчас Клод ${feelings[0]}; Гладкий ${feelings[1]}. Говорят в этом настроении.` : '',
+    events.some(x => x.includes('догонялк')) || Math.random() < 0.15 ? `Счёт в догонялки: Клод ${memory.wins[0]}, Гладкий ${memory.wins[1]}, Пип ${memory.wins[2]}.` : '',
+    lastWho !== null && !reply ? `Последним говорил ${NAMES[lastWho]}; теперь скорее очередь другого.` : '',
+    feelings.length === 3 ? `Сейчас ${feelings.map((f, i) => `${NAMES[i]} ${f}`).join('; ')}. Говорят в этом настроении.` : '',
     `Что было недавно:\n${events.join('\n') || 'ничего особенного'}`,
     said.length ? `Последние сообщения человека агенту:\n${said.map(t => '- ' + t).join('\n')}` : '',
     draft ? `Человек прямо сейчас пишет (${Math.round((now - draftStart) / 1000)} с${fixes >= MANY_FIXES ? `, стёр ${fixes} раз` : ''}): «${tail(draft, 300)}»` : '',
@@ -179,7 +185,7 @@ async function remark($: EngineInterface, m: Mind, now: number, typing: boolean)
     commands.length ? `Команды: ${commands.join(' ; ')}` : '',
     thoughts.length ? `Уже говорили (не повторяйся): ${thoughts.join(' | ')}` : '',
     langRule(),
-    reply ? `${lastSaid?.who === 0 ? 'Клод' : 'Гладкий'} только что сказал: «${lastSaid?.text}». Пусть ${lastSaid?.who === 0 ? 'Гладкий (who 1)' : 'Клод (who 0)'} ответит ему, как в разговоре двух друзей.`
+    reply && lastSaid ? `${NAMES[lastSaid.who]} только что сказал: «${lastSaid.text}». Пусть ответит ему кто-то другой (${others(lastSaid.who).map(i => `${NAMES[i]}, who ${i}`).join(' или ')}), как в разговоре друзей.`
     : typing ? 'Человек сейчас печатает. Отреагируй именно на то, что он пишет: подколи, подбодри или ответь по сути, будто подглядываешь через плечо.'
     : working ? 'Агент сейчас работает. Прокомментируй, что он делает: последние команды, файлы, ошибки.' : '',
   ].filter(Boolean).join('\n')
@@ -201,7 +207,7 @@ async function remark($: EngineInterface, m: Mind, now: number, typing: boolean)
   if (!thought) return
   keep(thoughts, thought.text, 6)
   // A reply that came back from the same speaker is turned to the other one.
-  if (reply && lastSaid && thought.who === lastSaid.who) thought.who = lastSaid.who === 0 ? 1 : 0
+  if (reply && lastSaid && thought.who === lastSaid.who) thought.who = others(lastSaid.who)[Math.random() < 0.5 ? 0 : 1]!
   lastSaid = reply ? null : { who: thought.who, text: thought.text, at: Date.now() }
   lastWho = thought.who
   lastRemarkAt = Date.now()
@@ -231,8 +237,8 @@ async function deep($: EngineInterface) {
       prompt: [
         'Пауза в работе: сейчас ты не ассистент и не вызываешь инструменты. Ответ увидит только мод с гномиками, не человек в чате.',
         SYSTEM,
-        feelings.length === 2 ? `Сейчас Клод ${feelings[0]}; Гладкий ${feelings[1]}.` : '',
-        lastWho !== null ? `Последним говорил ${lastWho === 0 ? 'Клод' : 'Гладкий'}; теперь скорее очередь другого.` : '',
+        feelings.length === 3 ? `Сейчас ${feelings.map((f, i) => `${NAMES[i]} ${f}`).join('; ')}.` : '',
+        lastWho !== null ? `Последним говорил ${NAMES[lastWho]}; теперь скорее очередь другого.` : '',
         thoughts.length ? `Уже говорили (не повторяйся): ${thoughts.join(' | ')}` : '',
         langRule(),
         'Это глубокая реплика: вспомни что-то конкретное из всей этой сессии — давнее решение, переделку, странную просьбу человека — и съязви по этому поводу, связав с тем, что происходит сейчас.',
@@ -444,16 +450,17 @@ export const register: Register = on => {
   on('ui.message', async ($, e, next) => {
     const data = e.data as { tag?: unknown; feelings?: unknown }
     if (Array.isArray(data.feelings)) {
-      feelings = data.feelings.filter((f): f is string => typeof f === 'string').slice(0, 2)
+      feelings = data.feelings.filter((f): f is string => typeof f === 'string').slice(0, 3)
       return next(e)
     }
-    if (data.tag !== 0 && data.tag !== 1) return next(e)
+    if (data.tag !== 0 && data.tag !== 1 && data.tag !== 2) return next(e)
     const winner = data.tag
     const memory = await recall($)
-    const wins: [number, number] = winner === 0 ? [memory.wins[0] + 1, memory.wins[1]] : [memory.wins[0], memory.wins[1] + 1]
+    const wins: [number, number, number] = [...memory.wins]
+    wins[winner] += 1
     await $.store.set('memory', { ...memory, wins })
     await update($, mind, m => ({ ...m, wins }))
-    note(`${winner === 0 ? 'Клод' : 'Гладкий'} поймал друга в догонялках`)
+    note(`${NAMES[winner]} поймал друга в догонялках`)
 
     return next(e)
   })
