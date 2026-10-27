@@ -4,17 +4,14 @@ import { ACCEL, born, chance, draw, emote, EXTRA, FALL_ASLEEP, hop, JUMP, pose, 
 import type { Look, Props, State } from './clawd'
 import type { Action, Order } from '../types'
 import { drawHd, lean } from './clawd-hd'
-import { drawPip } from './clawd-pip'
 import { nudge } from './mind'
 
-// Three Clawds in one band: the classic one, the finer one and Pip, the youngest. Each lives by his own
-// tick; on top of that any two notice each other, say hello, play tag and copy jumps.
-// A game between two of them; `it` is which of the two, `pair` which two of the three.
-type Local = { kind: 'greet' | 'chase' | 'leap'; it: 0 | 1; left: number } | null
-type Game = (NonNullable<Local> & { pair: [number, number] }) | null
+// Two Clawds in one band: the classic one and the finer one. Each lives by his own
+// tick; on top of that they notice each other, say hello, play tag and copy jumps.
+type Game = { kind: 'greet' | 'chase' | 'leap'; it: 0 | 1; left: number } | null
 // seen: the welcome and thought counters already acted on.
-type Pair = { pals: State[]; game: Game; cooldown: number; seen: { welcome: number; thought: number; order: number; noticed: number; snub: number } }
-const PAIRS: [number, number][] = [[0, 1], [0, 2], [1, 2]]
+type Pair = { pals: [State, State]; game: Game; cooldown: number; seen: { welcome: number; thought: number; order: number; noticed: number; snub: number } }
+export type Outcome = { winner: 0 | 1 } | null
 
 const COLOR = '#D97757'
 
@@ -41,17 +38,15 @@ const stopsAt = (s: State) => Math.round(s.x + (s.v * Math.abs(s.v)) / (2 * ACCE
 const readTime = (text: string) => sec(Math.min(9, 3 + text.length / 15))
 
 // One action, for an order or along with a remark; i says which corner and which side is his.
-// Pip, the third, takes the middle.
-const SPOT = [-12, 12, 0]
-export const perform = (s: State, i: number, action: Action, columns: number, cursor: number): State => {
+export const perform = (s: State, i: 0 | 1, action: Action, columns: number, cursor: number): State => {
   const max = Math.max(0, columns - W - EXTRA)
   const go = (s: State, goal: number): State =>
     ({ ...s, mode: 'walk', goal: Math.min(max, Math.max(0, goal)), speed: 1.1, left: sec(10), distracted: true, intent: null, emote: null })
   const middle = Math.round(max / 2)
   switch (action) {
-      case 'corners': return go(s, [0, max, middle][i] ?? middle)
-      case 'together': return go(s, middle + (SPOT[i] ?? 0))
-      case 'come': return go(s, cursor - W / 2 + (SPOT[i] ?? 0))
+      case 'corners': return go(s, i === 0 ? 0 : max)
+      case 'together': return go(s, middle + (i === 0 ? -6 : 6))
+      case 'come': return go(s, cursor - W / 2 + (i === 0 ? -6 : 6))
       case 'sleep': return { ...s, mode: 'sleep', nap: true, goal: null, left: FALL_ASLEEP, emote: null, needs: { ...s.needs, energy: 0.3 } }
       case 'dance': return hop(emote({ ...s, mode: 'idle', goal: null, left: sec(4) }, 'dance', 4))
       case 'jump': return hop({ ...s, mode: 'idle', goal: null, left: sec(1) })
@@ -64,35 +59,17 @@ export const perform = (s: State, i: number, action: Action, columns: number, cu
 
 // Carry out an order; the replies show at once, one bubble each.
 export const obey = (pair: Pair, order: Order, columns: number, cursor: number): Pair => {
-  const pals = pair.pals.map((s, i) => (order.who === 'all' || order.who === i ? perform(s, i, order.action, columns, cursor) : s))
+  let pals = pair.pals.map((s, i) => (order.who === 2 || order.who === i ? perform(s, i as 0 | 1, order.action, columns, cursor) : s)) as [State, State]
   for (const reply of order.replies) {
-    const s = pals[reply.who]!
-    pals[reply.who] = { ...s, say: { text: reply.text, left: readTime(reply.text), at: stopsAt(s) } }
+    pals[reply.who] = { ...pals[reply.who], say: { text: reply.text, left: readTime(reply.text), at: stopsAt(pals[reply.who]) } }
   }
   return { ...pair, pals, game: null, cooldown: order.action === 'chase' ? 0 : sec(10), seen: { ...pair.seen, order: order.id } }
 }
 
-// One game at a time: each pair plays its own, or, while another pair plays, only keeps out of the way.
-export const social = (pair: Pair, columns: number, report: (winner: number) => void = () => {}): Pair => {
-  const pals = [...pair.pals]
+export const social = (pair: Pair, columns: number, report: (winner: 0 | 1) => void = () => {}): Pair => {
+  let [a, b] = pair.pals
   let game = pair.game
   let cooldown = Math.max(0, pair.cooldown - 1)
-  for (const [i, j] of PAIRS) {
-    const mine = game !== null && game.pair[0] === i && game.pair[1] === j
-    const bystander = game !== null && !mine
-    const r = duo(pals[i]!, pals[j]!, mine ? game : null, cooldown, columns, w => report(w === 0 ? i : j), bystander)
-    pals[i] = r.a
-    pals[j] = r.b
-    if (!bystander) {
-      game = r.game ? { ...r.game, pair: [i, j] } : null
-      cooldown = r.cooldown
-    }
-  }
-  return { ...pair, pals, game, cooldown }
-}
-
-type Duo = { a: State; b: State; game: Local; cooldown: number }
-const duo = (a: State, b: State, game: Local, cooldown: number, columns: number, report: (winner: 0 | 1) => void, bystander: boolean): Duo => {
   const gap = Math.abs(b.x - a.x) - W
   const max = Math.max(0, columns - W - EXTRA)
 
@@ -138,7 +115,7 @@ const duo = (a: State, b: State, game: Local, cooldown: number, columns: number,
     if (game.it === 0) a = aloft(a)
     else b = aloft(b)
     game = game.left > 0 ? { ...game, left: game.left - 1 } : null
-  } else if (!bystander && cooldown === 0 && (free(a) || a.intent === 'play') && (free(b) || b.intent === 'play')) {
+  } else if (cooldown === 0 && (free(a) || a.intent === 'play') && (free(b) || b.intent === 'play')) {
     if (gap < 3) {
       a = emote({ ...stop(a), look: toward(a, b) }, 'wave', 1.5)
       b = emote({ ...stop(b), look: toward(b, a) }, 'wave', 1.5)
@@ -170,7 +147,7 @@ const duo = (a: State, b: State, game: Local, cooldown: number, columns: number,
   }
 
   // A sleeper across the way to his goal: he leaps over; a goal right at the sleeper, he stops short.
-  if (game === null && !bystander && gap < 1) {
+  if (game === null && gap < 1) {
     const over = (s: State, sleeper: State): { s: State; ticks: number } | null => {
       if (s.mode !== 'walk' || s.goal === null || s.air > 0 || sleeper.mode !== 'sleep') return null
       const side = Math.sign(sleeper.x - s.x) || 1
@@ -198,7 +175,7 @@ const duo = (a: State, b: State, game: Local, cooldown: number, columns: number,
     b = { ...b, x: Math.min(max, Math.max(0, b.x + pushB * side)) }
   }
 
-  return { a, b, game, cooldown }
+  return { ...pair, pals: [a, b], game, cooldown }
 }
 
 type Cell = { ch: string; dim: boolean } | null
@@ -265,11 +242,9 @@ const Clawds: ClientModule<Props, Pair> = (props, surface) => {
   const { Box, Text } = surface.elements
   latest.props = props
 
-  // Pip came later: a band from before him gets him on its next tick.
-  const trio = (pals: State[]): State[] => (pals.length >= 3 ? pals : [...pals, { ...born(latest.props ?? props, 2), x: 20 }])
   if (surface.state === undefined) {
     surface.setState({
-      pals: trio([born(props, 0), { ...born(props, 1), x: 40, dir: -1 }]), game: null, cooldown: sec(5),
+      pals: [born(props, 0), { ...born(props, 1), x: 40, dir: -1 }], game: null, cooldown: sec(5),
       seen: {
         welcome: props.mind?.welcome ?? 0, thought: props.mind?.thought?.id ?? 0, order: props.mind?.order?.id ?? 0,
         noticed: props.mind?.noticed ?? 0, snub: props.mind?.snub ?? 0,
@@ -279,41 +254,40 @@ const Clawds: ClientModule<Props, Pair> = (props, surface) => {
       const pair = surface.state!
       const p = latest.props ?? props
       const hour = new Date().getHours()
-      let pals = trio(pair.pals).map(s => tick(s, p, surface.columns, hour))
+      let pals: [State, State] = [tick(pair.pals[0], p, surface.columns, hour), tick(pair.pals[1], p, surface.columns, hour)]
       const seen = { ...pair.seen }
       // Back after hours away: both perk up, look at each other and jump for joy.
       if ((p.mind?.welcome ?? 0) > seen.welcome) {
         seen.welcome = p.mind?.welcome ?? 0
-        pals = pals.map(s => hop(emote({ ...s, mode: 'idle', left: sec(2), quiet: 0, needs: nudge(s.needs, { mood: 0.4 }) }, 'love', 2)))
+        pals = pals.map(s => hop(emote({ ...s, mode: 'idle', left: sec(2), quiet: 0, needs: nudge(s.needs, { mood: 0.4 }) }, 'love', 2))) as [State, State]
       }
       const thought = p.mind?.thought
       if (thought && thought.id > seen.thought) {
         seen.thought = thought.id
         const change = { happy: { mood: 0.2 }, sad: { mood: -0.2 }, tired: { energy: -0.1 }, curious: { curiosity: 0.2 }, grumpy: { mood: -0.1 } }[thought.mood]
-        // A sleeper does not talk: someone awake says it, or nobody if all are asleep.
-        const who = [thought.who, ...[0, 1, 2].filter(i => i !== thought.who)].find(i => pals[i] && pals[i].mode !== 'sleep')
-        if (who !== undefined) {
-          const s = pals[who]!
-          const acted = thought.act ? perform(s, who, thought.act, surface.columns, 2 + p.col) : s
-          pals[who] = { ...acted, say: { text: thought.text, left: readTime(thought.text), at: stopsAt(s) }, needs: nudge(acted.needs, change) }
+        // A sleeper does not talk: the other one says it, or nobody if both are asleep.
+        const who = pals[thought.who].mode !== 'sleep' ? thought.who : pals[1 - thought.who as 0 | 1].mode !== 'sleep' ? (1 - thought.who) as 0 | 1 : null
+        if (who !== null) {
+          const acted = thought.act ? perform(pals[who], who, thought.act, surface.columns, 2 + p.col) : pals[who]
+          pals[who] = { ...acted, say: { text: thought.text, left: readTime(thought.text), at: stopsAt(pals[who]) }, needs: nudge(acted.needs, change) }
         }
       }
       // Spoken to: pleased to be noticed, they turn to the prompt. Silenced mid-remark: they sulk a while.
       if ((p.mind?.noticed ?? 0) > seen.noticed) {
         seen.noticed = p.mind?.noticed ?? 0
-        pals = pals.map(s => ({ ...s, needs: nudge(s.needs, { mood: 0.3, social: -0.3 }) }))
+        pals = pals.map(s => ({ ...s, needs: nudge(s.needs, { mood: 0.3, social: -0.3 }) })) as [State, State]
       }
       if ((p.mind?.snub ?? 0) > seen.snub) {
         seen.snub = p.mind?.snub ?? 0
-        pals = pals.map(s => emote({ ...s, needs: nudge(s.needs, { mood: -0.5 }) }, 'sit', 4))
+        pals = pals.map(s => emote({ ...s, needs: nudge(s.needs, { mood: -0.5 }) }, 'sit', 4)) as [State, State]
       }
       // Whoever is talking stops strolling to say it; an errand (a goal: an order, a chase) he finishes talking.
-      pals = pals.map(s => (s.say && s.mode === 'walk' && s.goal === null ? { ...s, mode: 'idle', left: Math.max(s.left, sec(1)) } : s))
+      pals = pals.map(s => (s.say && s.mode === 'walk' && s.goal === null ? { ...s, mode: 'idle', left: Math.max(s.left, sec(1)) } : s)) as [State, State]
       const ordered = p.mind?.order && p.mind.order.id > seen.order
         ? obey({ ...pair, pals, seen }, p.mind.order, surface.columns, 2 + p.col)
         : { ...pair, pals, seen }
       const next = social(ordered, surface.columns, winner => surface.post({ tag: winner }))
-      if (next.pals[0]!.step % sec(5) === 0) surface.post({ feelings: next.pals.map(feeling) })
+      if (next.pals[0].step % sec(5) === 0) surface.post({ feelings: next.pals.map(feeling) })
       surface.setState(next)
     })
     surface.onPointer(ev => {
@@ -323,20 +297,18 @@ const Clawds: ClientModule<Props, Pair> = (props, surface) => {
         if (ev.x < Math.round(s.x) || ev.x >= Math.round(s.x) + W) return s
         const awake = s.mode === 'sleep' ? { ...s, mode: 'idle' as const, left: sec(1) } : s
         return hop(emote({ ...awake, quiet: 0 }, 'love', 1.5))
-      })
+      }) as [State, State]
       surface.setState({ ...pair, pals })
     })
     return <Box />
   }
 
-  const [classic, fine, pip] = surface.state.pals
+  const [classic, fine] = surface.state.pals
   const width = Math.max(1, surface.columns)
   const lines: Cell[][] = Array.from({ length: 4 }, () => new Array<Cell>(width).fill(null))
-  const facing = (s: State) => (Math.abs(s.v) > 0.03 ? (s.v > 0 ? 1 : -1) : s.dir)
   const sprites: [State, string[]][] = [
-    [classic!, draw(pose(classic!))],
-    [fine!, drawHd(pose(fine!), lean(fine!), facing(fine!))],
-    ...(pip ? [[pip, drawPip(pose(pip), lean(pip), facing(pip))] as [State, string[]]] : []),
+    [classic, draw(pose(classic))],
+    [fine, drawHd(pose(fine), lean(fine), Math.abs(fine.v) > 0.03 ? (fine.v > 0 ? 1 : -1) : fine.dir)],
   ]
   const taken: Span[] = []
   for (const [s, rows] of sprites) {

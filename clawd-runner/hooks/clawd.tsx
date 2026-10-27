@@ -31,7 +31,7 @@ export type State = {
   seq: number; quiet: number; wasWorking: boolean; distracted: boolean; reading: boolean
   emote: Emote | null; emoteLeft: number; seen: Seen
   // Who he is and what he wants; `intent` is the plan an idle pick made, `nap` a sleep he chose.
-  trait: 0 | 1 | 2; needs: Needs; intent: 'play' | 'explore' | null; nap: boolean
+  trait: 0 | 1; needs: Needs; intent: 'play' | 'explore' | null; nap: boolean
   // at: the column the bubble was pinned to when he started talking; it stays put while he moves.
   say: { text: string; left: number; at: number } | null
 }
@@ -262,7 +262,7 @@ export const side = (s: State) =>
   : s.mode === 'wait' && !s.reading ? '.'.repeat((Math.floor(s.step / 8) % 3) + 1)
   : ''
 
-export const born = (p: Props, trait: 0 | 1 | 2 = 0): State => ({
+export const born = (p: Props, trait: 0 | 1 = 0): State => ({
   trait, needs: RESTED, intent: null, nap: false, say: null,
   x: 0, v: 0, dir: 1, speed: 0.7, goal: null, phase: 0, mode: 'idle', left: sec(1), step: 0, air: 0,
   look: 'ahead', blink: 0, seq: p.seq, quiet: 0, wasWorking: p.working, distracted: false, reading: false,
