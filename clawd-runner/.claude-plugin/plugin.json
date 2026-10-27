@@ -1,0 +1,1 @@
+{ "name": "clawd-runner", "version": "0.5.0", "description": "Clawd lives above the prompt; /clawd hides or shows him", "types": "./types/index.d.ts" }

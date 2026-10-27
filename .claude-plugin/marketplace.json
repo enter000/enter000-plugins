@@ -1,0 +1,5 @@
+{
+  "name": "enter000-plugins",
+  "owner": { "name": "enter000" },
+  "plugins": [{ "name": "clawd-runner", "source": "./clawd-runner", "description": "Clawd lives above the prompt" }]
+}

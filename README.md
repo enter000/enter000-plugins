@@ -1,0 +1,18 @@
+# enter000-plugins
+
+Plugins for Claude Code.
+
+```
+/plugin marketplace add enter000/enter000-plugins
+/plugin install clawd-runner@enter000-plugins
+```
+
+## clawd-runner
+
+Two tiny Clawds live above the prompt: they wander, nap, play tag, watch you type and now and then
+comment on your work (in Russian).
+
+- `/clawd` hides or shows them
+- `/clawd quiet` / `/clawd talk` turns their remarks off or on; each remark is a small model call
+- `/clawd stats` shows today's calls and tokens
+- `/clawd <anything else>` is an order to them: "dance", "go to the corners", "come here"
