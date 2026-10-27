@@ -1,7 +1,7 @@
 import type { Pose, State } from './clawd'
 
 // Pip, the youngest: the fine Clawd's quadrant blocks on a smaller body, his eyes, and a mouth
-// that opens while he talks.
+// that shows while he talks.
 const W = 20 // pixels, two per cell
 const H = 8 // pixels, two per text row; the top two are room to jump
 const EYES = { ahead: [6, 12], left: [5, 11], right: [7, 13] }
@@ -31,10 +31,9 @@ export const drawPip = (p: Pose, f: Face, lean: number, dir: 1 | -1): string[] =
     const row = p.eyeRow === 0 ? 0 : 1
     for (const c of EYES[p.look]) { set(row, c, false); set(row, c + 1, false) }
   }
-  // A small mouth under the eyes; talking, it opens wider and down to the chin.
+  // Only while he talks, and wide: a narrow one under the eyes reads as a nose.
   const centre = (EYES[p.look][0]! + EYES[p.look][1]!) / 2 + 1
-  set(2, centre - 1, false); set(2, centre, false)
-  if (f.open) { set(2, centre - 2, false); set(2, centre + 1, false); set(3, centre - 1, false); set(3, centre, false) }
+  if (f.open) for (let c = centre - 2; c <= centre + 1; c++) set(2, c, false)
   LEG_COLS.forEach((c, i) => {
     set(4, c); set(4, c + 1)
     // A lifted leg bends back by half its width, away from where he is going.

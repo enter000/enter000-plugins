@@ -23,7 +23,7 @@ it is done, flinch when a command fails and dance when tests pass.
 Now and then they comment on your work in speech bubbles: the draft you are typing, the files the
 agent touches, the commands that failed, the time of day. Two of them are pompous snobs who think
 they would have written it better, and Pip, the youngest, who worships them both and gets
-everything wrong. Pip has a mouth, and it moves while he talks. Remarks come in the language you write to the agent in, or one
+everything wrong. Pip opens his mouth when he talks. Remarks come in the language you write to the agent in, or one
 you set.
 
 They act out what they say: the snob sits down in disgust, the braggart jumps. They remember a few
