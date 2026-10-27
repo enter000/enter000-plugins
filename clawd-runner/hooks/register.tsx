@@ -282,7 +282,7 @@ export const register: Register = on => {
       await $.store.set('talking', talk)
       if (talk) lastThought = Date.now() - THINK_EVERY + 20_000 // first remark in about half a minute
 
-      return { text: talk ? 'The Clawds will think out loud now and then (a haiku call every few minutes).' : 'The Clawds keep their thoughts to themselves.' }
+      return { text: talk ? `The Clawds will think out loud now and then (a ${model} call every 20 seconds or so).` : 'The Clawds keep their thoughts to themselves.' }
     }
     if (arg === 'model' || arg.startsWith('model ')) {
       const name = arg.slice('model'.length).trim()

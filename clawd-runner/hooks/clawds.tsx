@@ -203,11 +203,24 @@ export const wrap = (text: string, max = 60): string[] => {
   return [chars.slice(0, cut).join('').trim(), chars.slice(cut).join('').trim()]
 }
 
+// No free spot beside him: the nearest free stretch of the same rows on screen; failing that, on screen over the rest.
+const slide = (spot: Span[], length: number, width: number, taken: Span[]): Span[] => {
+  const want = spot[0]!.from
+  const at = (from: number) => spot.map(s => ({ ...s, from, to: from + length }))
+  for (let d = 0; d <= width; d++) {
+    for (const from of [want - d, want + d]) {
+      if (from < 0 || from + length > width) continue
+      if (!at(from).some(s => taken.some(t => clash(t, s)))) return at(from)
+    }
+  }
+  return at(Math.max(0, Math.min(width - length, want)))
+}
+
 // Two lines sit on the two top rows, beside him on the right or else on the left.
 export const placeBubble = (x: number, length: number, width: number, taken: Span[]): Span[] => {
   const spots = [x + W + 1, x - length - 1].map(from => [0, 1].map(row => ({ row, from, to: from + length })))
   const fits = spots.filter(([top]) => top!.from >= 0 && top!.to <= width)
-  return fits.find(spot => !spot.some(s => taken.some(t => clash(t, s)))) ?? fits[0] ?? spots[0]!
+  return fits.find(spot => !spot.some(s => taken.some(t => clash(t, s)))) ?? slide(fits[0] ?? spots[0]!, length, width, taken)
 }
 
 export const placeMark = (x: number, length: number, width: number, taken: Span[]): Span => {
@@ -217,7 +230,7 @@ export const placeMark = (x: number, length: number, width: number, taken: Span[
     { row: 0, from: x + Math.floor((W - length) / 2), to: x + Math.floor((W - length) / 2) + length },
   ].map(spot => (spot.row === 0 ? { ...spot, from: Math.max(0, Math.min(width - length, spot.from)), to: Math.max(0, Math.min(width - length, spot.from)) + length } : spot))
   const fits = spots.filter(spot => spot.from >= 0 && spot.to <= width)
-  return fits.find(spot => !taken.some(t => clash(t, spot))) ?? fits[0] ?? spots[0]!
+  return fits.find(spot => !taken.some(t => clash(t, spot))) ?? slide([fits[0] ?? spots[0]!], length, width, taken)[0]!
 }
 
 const latest: { props: Props | null } = { props: null }
@@ -290,7 +303,8 @@ const Clawds: ClientModule<Props, Pair> = (props, surface) => {
     if (!mark) continue
     const rows = wrap(mark)
     const length = Math.max(...rows.map(row => Array.from(row).length))
-    const anchor = s.say ? s.say.at : Math.round(s.x)
+    // Pinned where he would stop, which can lie past the edge he stops at.
+    const anchor = Math.max(0, Math.min(width - W - EXTRA, s.say ? s.say.at : Math.round(s.x)))
     const spots = rows.length === 1 ? [placeMark(anchor, length, width, taken)] : placeBubble(anchor, length, width, taken)
     spots.forEach((spot, i) => {
       taken.push(spot)
