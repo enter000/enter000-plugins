@@ -32,15 +32,17 @@ you set.
 - `/clawd lang <language>` sets the language of their remarks (`English`, `Deutsch`, anything the
   model understands); `/clawd lang auto` goes back to the language you write in
 - `/clawd model <name>` picks the model for their remarks (`haiku`, `sonnet`, a full model id);
-  `/clawd model` shows the current one. Default: `sonnet`. The once-a-turn remark that recalls the
-  whole session runs on the session's own model
+  `/clawd model` shows the current one. Default: `sonnet`. Every fifth turn a remark that recalls
+  the whole session runs on the session's own model
 - `/clawd stats` shows today's calls and tokens
-- `/clawd <anything else>` is an order to them: "dance", "go to the corners", "come here", "sleep"
+- `/clawd <anything else>` is an order to them: "dance", "go to the corners", "come here", "sleep".
+  A message that opens with "guys,", "crabs," or "Sleek," goes to them too, not to the agent
 
 ### Cost
 
 Remarks are short model calls on your Claude Code account: one every 20 seconds or so when idle,
-more often while you type or the agent works. `/clawd model haiku` makes them cheaper, `/clawd
+every 15 seconds when you pause typing, every 5 while the agent works. After 5 minutes with nobody
+around they keep quiet till you are back. `/clawd model haiku` makes them cheaper, `/clawd
 quiet` stops them; the Clawds keep living without them.
 
 ## License
